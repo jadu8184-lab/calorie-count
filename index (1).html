@@ -572,9 +572,16 @@ function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-// ——— UTILS ———
+// ——— UTILS (Updated Timezone Handling) ———
+function toLocalDateString(d) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function today() {
-  return new Date().toISOString().split('T')[0];
+  return toLocalDateString(new Date());
 }
 
 function getWeekStart() {
@@ -582,21 +589,23 @@ function getWeekStart() {
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   const m = new Date(d); m.setDate(diff);
-  return m.toISOString().split('T')[0];
+  return toLocalDateString(m);
 }
 
 function getWeekDays() {
   const days = [];
-  const start = new Date(getWeekStart());
+  const start = new Date();
+  const day = start.getDay();
+  const diff = start.getDate() - day + (day === 0 ? -6 : 1);
+  start.setDate(diff);
   for (let i = 0; i < 7; i++) {
     const d = new Date(start); d.setDate(start.getDate() + i);
-    days.push(d.toISOString().split('T')[0]);
+    days.push(toLocalDateString(d));
   }
   return days;
 }
 
 function getMonthDays() {
-  // Returns all days in the current calendar month up to and including today
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth();
@@ -604,7 +613,7 @@ function getMonthDays() {
   const days = [];
   for (let i = 1; i <= todayDate; i++) {
     const d = new Date(year, month, i);
-    days.push(d.toISOString().split('T')[0]);
+    days.push(toLocalDateString(d));
   }
   return days;
 }
@@ -615,7 +624,6 @@ function getDaysInMonth() {
 }
 
 function calcTotalDeficit() {
-  // Returns { achieved, goal, remaining, pct }
   if (!state.profile) return { achieved: 0, goal: 0, remaining: 0, pct: 0 };
   const p = state.profile;
   const kgToLose = p.currentWeight - p.targetWeight;
@@ -625,12 +633,10 @@ function calcTotalDeficit() {
   Object.entries(state.dailyLog).forEach(([, d]) => {
     const spent = (d.transactions || []).reduce((s, t) => s + t.amount, 0);
     if (spent > 0) {
-      // Positive deficit means user ate less than TDEE (good), negative means ate more (bad)
       achieved += p.tdee - spent;
     }
   });
 
-  // achieved can be negative if user overate a lot
   const remaining = Math.max(0, goal - achieved);
   const pct = goal > 0 ? Math.min(100, Math.max(0, (achieved / goal) * 100)) : 0;
   return { achieved, goal, remaining, pct };
@@ -658,7 +664,7 @@ function calcStreak() {
   let streak = 0;
   const d = new Date();
   while (true) {
-    const key = d.toISOString().split('T')[0];
+    const key = toLocalDateString(d);
     const spent = daySpent(key);
     if (spent > 0 && spent <= state.profile.dailyBudget) {
       streak++;
@@ -676,7 +682,6 @@ function calcDaysLeft() {
   const dailyDeficit = state.profile.tdee - state.profile.dailyBudget;
   if (dailyDeficit <= 0) return null;
 
-  // Net actual deficit: eating more than TDEE reduces your progress
   let actualDeficit = 0;
   Object.entries(state.dailyLog).forEach(([, d]) => {
     const spent = (d.transactions || []).reduce((s, t) => s + t.amount, 0);
@@ -767,7 +772,6 @@ document.getElementById('ob-next').addEventListener('click', () => {
     document.getElementById('ob-next').textContent = 'START TRACKING →';
     updateGoalPreview();
   } else {
-    // Complete onboarding
     const name = document.getElementById('inp-name').value.trim();
     const age = parseInt(document.getElementById('inp-age').value);
     const gender = document.getElementById('inp-gender').value;
@@ -984,7 +988,7 @@ function renderProfile() {
   document.getElementById('di-tdee').textContent = fmt(p.tdee) + ' cal/day';
   document.getElementById('di-deficit').textContent = '−' + fmt(p.tdee - p.dailyBudget) + ' cal/day';
 
-  // Total deficit journey (profile tab)
+  // Total deficit journey
   const def = calcTotalDeficit();
   document.getElementById('profile-deficit-pct').textContent = def.pct.toFixed(1) + '%';
   document.getElementById('profile-deficit-detail').textContent =
@@ -997,7 +1001,7 @@ function renderProfile() {
   const now = new Date();
   for (let i = 29; i >= 0; i--) {
     const d = new Date(now); d.setDate(now.getDate() - i);
-    const key = d.toISOString().split('T')[0];
+    const key = toLocalDateString(d);
     const spent = daySpent(key);
     const hasData = spent > 0;
     const inBudget = hasData && spent <= p.dailyBudget;
